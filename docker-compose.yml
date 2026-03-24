@@ -22,6 +22,7 @@ services:
       - REQUIRED_TOKEN_AMOUNT=${REQUIRED_TOKEN_AMOUNT:-1000000}
       - SOLANA_RPC=${SOLANA_RPC:-https://api.devnet.solana.com}
       - JWT_SECRET=${JWT_SECRET:-dev_secret_change_in_prod}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - SESSION_HOURS=${SESSION_HOURS:-4}
       - NODE_ENV=${NODE_ENV:-development}
       - VNC_RESOLUTION=${VNC_RESOLUTION:-1280x800}
