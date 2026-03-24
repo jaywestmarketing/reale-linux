@@ -103,7 +103,11 @@ SOLANA_RPC=https://api.devnet.solana.com
 
 ```
 Browser → Portal (port 80)
-       → POST /api/auth/verify { wallet }
+       → Connect wallet (Phantom/Solflare)
+       → GET /api/auth/nonce?wallet=... → server returns challenge message
+       → Wallet signs challenge message (ed25519)
+       → POST /api/auth/verify { wallet, signature, message }
+       → Auth server verifies signature proves wallet ownership
        → Auth server checks SPL balance on-chain
        → If OK: issue JWT cookie (reale_session)
        → Redirect to /desktop/vnc.html
@@ -147,7 +151,7 @@ reale-linux/
 
 ## Phase 2 Roadmap
 
-- [ ] Wallet signature verification (prove ownership)
+- [x] Wallet signature verification (prove ownership)
 - [ ] Per-session resource limits (CPU/RAM quotas)
 - [ ] Multi-user isolation (one container per session)
 - [ ] Persistent user home directories (Render/S3 volumes)
