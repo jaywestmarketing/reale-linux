@@ -19,6 +19,7 @@ const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const nacl = require("tweetnacl");
+const { OAuth2Client } = require("google-auth-library");
 const {
   Connection,
   PublicKey,
@@ -55,9 +56,13 @@ const CONFIG = {
 
   // Port
   PORT: parseInt(process.env.AUTH_PORT || "3000"),
+
+  // Google OAuth
+  GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
 };
 
 const solanaConnection = new Connection(CONFIG.RPC_ENDPOINT, "confirmed");
+const googleClient = new OAuth2Client(CONFIG.GOOGLE_CLIENT_ID);
 
 // ── Nonce Store ─────────────────────────────────────────────
 // In-memory store for signature challenges. Each nonce expires after 5 minutes.
@@ -105,16 +110,29 @@ function verifySignature(walletAddress, signature, message) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
-function issueSession(wallet) {
+function issueSession({ method, email, name, wallet }) {
   return jwt.sign(
     {
-      wallet,
+      method,         // "google" | "wallet"
+      email: email || null,
+      name: name || null,
+      wallet: wallet || null,
       product: "reale-linux",
       iss: "reale.one",
     },
     CONFIG.JWT_SECRET,
     { expiresIn: `${CONFIG.SESSION_HOURS}h` }
   );
+}
+
+function setSessionCookie(res, token) {
+  res.cookie("reale_session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: CONFIG.SESSION_HOURS * 60 * 60 * 1000,
+    path: "/",
+  });
 }
 
 async function checkTokenBalance(walletAddress) {
@@ -158,6 +176,16 @@ app.get("/health", (req, res) => {
 });
 
 /**
+ * GET /config
+ * Public config for the portal (Google Client ID, etc.)
+ */
+app.get("/config", (req, res) => {
+  res.json({
+    googleClientId: CONFIG.GOOGLE_CLIENT_ID,
+  });
+});
+
+/**
  * GET /auth/nonce
  * Request a challenge message for the wallet to sign.
  * Query: ?wallet=SoLaNaWaLlEtAdDrEsS
@@ -172,6 +200,55 @@ app.get("/auth/nonce", (req, res) => {
 
   const message = createChallenge(wallet);
   res.json({ message });
+});
+
+/**
+ * POST /auth/google
+ * Google Sign-In — verify Google ID token and issue session.
+ * Body: { credential: "<Google ID token from GSI>" }
+ */
+app.post("/auth/google", async (req, res) => {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ error: "Missing Google credential" });
+  }
+
+  if (!CONFIG.GOOGLE_CLIENT_ID) {
+    return res.status(500).json({ error: "Google Sign-In not configured on server" });
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: CONFIG.GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload.email_verified) {
+      return res.status(401).json({ error: "Google email not verified" });
+    }
+
+    const token = issueSession({
+      method: "google",
+      email: payload.email,
+      name: payload.name,
+    });
+
+    setSessionCookie(res, token);
+
+    res.json({
+      success: true,
+      message: "Access granted",
+      email: payload.email,
+      name: payload.name,
+      sessionExpires: `${CONFIG.SESSION_HOURS}h`,
+      redirect: "/desktop/vnc.html?autoconnect=1&resize=scale&show_dot=1",
+    });
+  } catch (err) {
+    console.error("[google]", err.message);
+    res.status(401).json({ error: "Invalid Google credential" });
+  }
 });
 
 /**
@@ -261,16 +338,8 @@ app.post("/auth/verify", async (req, res) => {
       });
     }
 
-    const token = issueSession(wallet);
-
-    // Set secure session cookie
-    res.cookie("reale_session", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: CONFIG.SESSION_HOURS * 60 * 60 * 1000,
-      path: "/",
-    });
+    const token = issueSession({ method: "wallet", wallet });
+    setSessionCookie(res, token);
 
     res.json({
       success: true,
@@ -302,8 +371,14 @@ app.get("/validate", (req, res) => {
 
   try {
     const decoded = jwt.verify(token, CONFIG.JWT_SECRET);
-    res.setHeader("X-Wallet", decoded.wallet);
-    res.status(200).json({ valid: true, wallet: decoded.wallet });
+    if (decoded.wallet) res.setHeader("X-Wallet", decoded.wallet);
+    if (decoded.email) res.setHeader("X-Email", decoded.email);
+    res.status(200).json({
+      valid: true,
+      method: decoded.method,
+      wallet: decoded.wallet,
+      email: decoded.email,
+    });
   } catch (err) {
     res.status(401).json({ error: "Invalid or expired session" });
   }
@@ -321,6 +396,7 @@ app.post("/auth/logout", (req, res) => {
 // ── Start ────────────────────────────────────────────────────
 app.listen(CONFIG.PORT, "127.0.0.1", () => {
   console.log(`[RealE Auth] Listening on port ${CONFIG.PORT}`);
+  console.log(`[RealE Auth] Google Sign-In: ${CONFIG.GOOGLE_CLIENT_ID ? "enabled" : "not configured"}`);
   console.log(`[RealE Auth] Token mint: ${CONFIG.TOKEN_MINT}`);
   console.log(`[RealE Auth] Required balance: ${CONFIG.REQUIRED_AMOUNT}`);
   console.log(`[RealE Auth] RPC: ${CONFIG.RPC_ENDPOINT}`);

@@ -101,6 +101,21 @@ SOLANA_RPC=https://api.devnet.solana.com
 
 ## Auth Flow
 
+### Google Sign-In (primary)
+```
+Browser → Portal (port 80)
+       → Click "Sign in with Google"
+       → Google returns ID token
+       → POST /api/auth/google { credential }
+       → Server verifies ID token with Google
+       → Issue JWT cookie (reale_session)
+       → Click "Launch Desktop"
+       → Nginx auth_request /_auth validates JWT
+       → noVNC connects to TigerVNC :5901
+       → Full Linux desktop in browser
+```
+
+### Solana Wallet (alternative — SPL token gated)
 ```
 Browser → Portal (port 80)
        → Connect wallet (Phantom/Solflare)
