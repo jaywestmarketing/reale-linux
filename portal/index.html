@@ -6,6 +6,7 @@
   <title>RealE Linux — Access Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -356,6 +357,102 @@
 
     .footer a { color: var(--accent2); text-decoration: none; }
     .footer a:hover { text-decoration: underline; }
+
+    /* ── Google Sign-In ── */
+    .google-btn-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+
+    /* ── Collapsible wallet section ── */
+    .wallet-section {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s ease, opacity 0.3s ease;
+      opacity: 0;
+    }
+
+    .wallet-section.open {
+      max-height: 600px;
+      opacity: 1;
+    }
+
+    .wallet-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 4px;
+    }
+
+    .wallet-toggle:hover {
+      border-color: var(--accent2);
+      color: var(--accent2);
+    }
+
+    .wallet-toggle .arrow {
+      transition: transform 0.3s;
+      display: inline-block;
+    }
+
+    .wallet-toggle.active .arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ── User info (shown after Google login) ── */
+    .user-info {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: rgba(0,245,160,0.06);
+      border: 1px solid rgba(0,245,160,0.2);
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+
+    .user-info.visible { display: flex; }
+
+    .user-info .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #080c14;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .user-info .details {
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .user-info .details .name {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .user-info .details .email {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -371,51 +468,76 @@
     <div class="tagline">Browser Desktop · SPL Token Gated</div>
 
     <h1>Access Your<br><span>Linux Desktop</span></h1>
-    <p class="subtitle">Connect your Solana wallet and verify your RealE token balance to launch a full browser-based Linux desktop.</p>
+    <p class="subtitle">Sign in to launch a full browser-based Linux desktop.</p>
 
-    <!-- Token requirement badge -->
-    <div class="token-badge">
-      <div class="token-dot"></div>
-      <div class="token-text">
-        Requires: RealE Token (SPL)<br>
-        Minimum balance: <strong id="requiredDisplay">1 REALE</strong>
+    <!-- User info (shown after login) -->
+    <div class="user-info" id="userInfo">
+      <div class="avatar" id="userAvatar"></div>
+      <div class="details">
+        <div class="name" id="userName"></div>
+        <div class="email" id="userEmail"></div>
       </div>
     </div>
 
-    <!-- Wallet connect -->
-    <label class="input-label">Wallet</label>
-    <div class="input-row">
-      <input
-        class="wallet-input"
-        id="walletAddr"
-        type="text"
-        placeholder="Connect wallet to sign & verify..."
-        autocomplete="off"
-        spellcheck="false"
-        readonly
-      >
-      <button class="btn btn-ghost" onclick="checkBalance()" title="Check Balance">
-        ◈ Check
+    <!-- Google Sign-In (rendered dynamically after config load) -->
+    <div class="google-btn-wrap" id="googleBtnWrap">
+      <div id="googleBtnTarget"></div>
+    </div>
+
+    <!-- Launch button (visible after Google login) -->
+    <button class="btn btn-primary" id="launchBtn" onclick="launchDesktop()" style="display:none;">
+      ⚡ Launch Desktop
+    </button>
+
+    <!-- Wallet auth (collapsible) -->
+    <div class="divider">or use Solana wallet</div>
+
+    <button class="wallet-toggle" id="walletToggle" onclick="toggleWalletSection()">
+      <span>SPL Token Gate Access</span>
+      <span class="arrow">▼</span>
+    </button>
+
+    <div class="wallet-section" id="walletSection">
+      <!-- Token requirement badge -->
+      <div class="token-badge" style="margin-top: 16px;">
+        <div class="token-dot"></div>
+        <div class="token-text">
+          Requires: RealE Token (SPL)<br>
+          Minimum balance: <strong id="requiredDisplay">1 REALE</strong>
+        </div>
+      </div>
+
+      <label class="input-label">Wallet</label>
+      <div class="input-row">
+        <input
+          class="wallet-input"
+          id="walletAddr"
+          type="text"
+          placeholder="Connect wallet to sign & verify..."
+          autocomplete="off"
+          spellcheck="false"
+          readonly
+        >
+        <button class="btn btn-ghost" onclick="checkBalance()" title="Check Balance">
+          ◈ Check
+        </button>
+      </div>
+
+      <div class="balance-row" id="balanceRow">
+        <span class="balance-label">Your Balance</span>
+        <span class="balance-value" id="balanceValue">—</span>
+      </div>
+
+      <button class="btn btn-primary" id="walletLaunchBtn" onclick="verifyAndLaunch()">
+        ⚡ Verify &amp; Launch Desktop
       </button>
+
+      <div style="margin-top: 12px;">
+        <button class="btn btn-ghost" style="width:100%;" onclick="connectPhantom()">
+          👻 Connect Phantom Wallet
+        </button>
+      </div>
     </div>
-
-    <!-- Balance display -->
-    <div class="balance-row" id="balanceRow">
-      <span class="balance-label">Your Balance</span>
-      <span class="balance-value" id="balanceValue">—</span>
-    </div>
-
-    <!-- Launch button -->
-    <button class="btn btn-primary" id="launchBtn" onclick="verifyAndLaunch()">
-      ⚡ Verify &amp; Launch Desktop
-    </button>
-
-    <!-- Phantom wallet connect hint -->
-    <div class="divider">or use browser wallet</div>
-
-    <button class="btn btn-ghost" style="width:100%;" onclick="connectPhantom()">
-      👻 Connect Phantom Wallet
-    </button>
 
     <!-- Status messages -->
     <div class="status info" id="statusInfo"></div>
@@ -432,8 +554,59 @@
 </div>
 
 <script>
-  // ── Config (injected at build time or set via env) ──────────
+  // ── Config ─────────────────────────────────────────────────
   const API_BASE = '/api';
+
+  // ── Wallet section toggle ──────────────────────────────────
+  function toggleWalletSection() {
+    const section = document.getElementById('walletSection');
+    const toggle = document.getElementById('walletToggle');
+    section.classList.toggle('open');
+    toggle.classList.toggle('active');
+  }
+
+  // ── Google Sign-In callback ────────────────────────────────
+  async function handleGoogleSignIn(response) {
+    showStatus('info', 'Signing in with Google...');
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: response.credential }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        // Show user info
+        const infoEl = document.getElementById('userInfo');
+        document.getElementById('userName').textContent = data.name;
+        document.getElementById('userEmail').textContent = data.email;
+        document.getElementById('userAvatar').textContent = data.name.charAt(0).toUpperCase();
+        infoEl.classList.add('visible');
+
+        // Hide Google button, show launch
+        document.getElementById('googleBtnWrap').style.display = 'none';
+        document.getElementById('launchBtn').style.display = 'block';
+
+        showStatus('success', `✓ Signed in as ${data.email}`);
+      } else {
+        showStatus('error', data.error || 'Google sign-in failed.');
+      }
+    } catch (err) {
+      showStatus('error', 'Network error during Google sign-in.');
+    }
+  }
+
+  // ── Launch desktop (after Google login) ─────────────────────
+  function launchDesktop() {
+    showStatus('success', '✓ Launching desktop...');
+    setTimeout(() => {
+      window.location.href = '/desktop/vnc.html?autoconnect=1&resize=scale&show_dot=1';
+    }, 800);
+  }
 
   // ── Helpers ─────────────────────────────────────────────────
   function showStatus(type, msg) {
@@ -448,7 +621,8 @@
   }
 
   function setLoading(loading) {
-    const btn = document.getElementById('launchBtn');
+    const btn = document.getElementById('walletLaunchBtn');
+    if (!btn) return;
     btn.disabled = loading;
     btn.innerHTML = loading
       ? '<span class="spinner"></span>Verifying on-chain...'
@@ -612,11 +786,53 @@
     }
   }
 
-  // ── URL error param ─────────────────────────────────────────
-  window.addEventListener('DOMContentLoaded', () => {
+  // ── Init ─────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('error') === 'unauthorized') {
-      showStatus('error', 'Session expired or invalid. Please verify your wallet again.');
+      showStatus('error', 'Session expired or invalid. Please sign in again.');
+    }
+
+    // Fetch server config and render Google Sign-In button
+    try {
+      const res = await fetch(`${API_BASE}/config`);
+      const cfg = await res.json();
+
+      if (cfg.googleClientId) {
+        // Wait for GSI library to load
+        const waitForGoogle = () => new Promise((resolve) => {
+          if (window.google?.accounts?.id) return resolve();
+          const check = setInterval(() => {
+            if (window.google?.accounts?.id) { clearInterval(check); resolve(); }
+          }, 100);
+        });
+
+        await waitForGoogle();
+
+        google.accounts.id.initialize({
+          client_id: cfg.googleClientId,
+          callback: handleGoogleSignIn,
+        });
+
+        google.accounts.id.renderButton(
+          document.getElementById('googleBtnTarget'),
+          {
+            type: 'standard',
+            shape: 'rectangular',
+            theme: 'filled_black',
+            text: 'signin_with',
+            size: 'large',
+            logo_alignment: 'left',
+            width: 380,
+          }
+        );
+      } else {
+        // No Google client ID configured — hide Google section
+        document.getElementById('googleBtnWrap').style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Failed to load config:', err);
+      document.getElementById('googleBtnWrap').style.display = 'none';
     }
   });
 </script>
