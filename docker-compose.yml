@@ -1,0 +1,38 @@
+# =============================================================
+# RealE Linux — Docker Compose (local dev / test)
+# Copyright (c) Joe Wease, RealE
+# =============================================================
+
+version: "3.9"
+
+services:
+  reale-linux:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reale-linux
+    restart: unless-stopped
+    ports:
+      - "8080:80"       # Portal → localhost:8080
+      - "3000:3000"     # Auth API → localhost:3000
+      - "5901:5901"     # VNC direct (optional for debug)
+      - "6080:6080"     # noVNC websocket (optional for debug)
+    environment:
+      - REALE_TOKEN_MINT=${REALE_TOKEN_MINT}
+      - REQUIRED_TOKEN_AMOUNT=${REQUIRED_TOKEN_AMOUNT:-1000000}
+      - SOLANA_RPC=${SOLANA_RPC:-https://api.devnet.solana.com}
+      - JWT_SECRET=${JWT_SECRET:-dev_secret_change_in_prod}
+      - SESSION_HOURS=${SESSION_HOURS:-4}
+      - NODE_ENV=${NODE_ENV:-development}
+      - VNC_RESOLUTION=${VNC_RESOLUTION:-1280x800}
+    volumes:
+      # Persist user home across restarts (optional)
+      - reale_home:/root
+    shm_size: '512mb'
+    # RunPod GPU pods may need this for display
+    devices:
+      - /dev/dri:/dev/dri
+
+volumes:
+  reale_home:
+    driver: local

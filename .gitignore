@@ -1,0 +1,6 @@
+.env
+node_modules/
+*.log
+.vnc/*.pid
+*.pid
+.DS_Store

@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RealE Linux — Access Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #080c14;
+      --surface:  #0d1421;
+      --border:   #1c2a42;
+      --accent:   #00f5a0;
+      --accent2:  #00b8d9;
+      --warn:     #ff4d6d;
+      --text:     #e2eaf8;
+      --muted:    #5a7090;
+      --glow:     0 0 40px rgba(0,245,160,0.15);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Animated grid background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,245,160,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,245,160,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      animation: gridPulse 8s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes gridPulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.4; }
+    }
+
+    /* ── Orb glow ── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(0,245,160,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .layout {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: var(--glow), 0 24px 64px rgba(0,0,0,0.6);
+      animation: cardIn 0.6s cubic-bezier(0.16,1,0.3,1) both;
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ── Logo ── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .logo-mark {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      font-size: 14px;
+      color: #080c14;
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-text span {
+      color: var(--accent);
+    }
+
+    .tagline {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 36px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 8px;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 32px;
+      line-height: 1.6;
+    }
+
+    /* ── Token badge ── */
+    .token-badge {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,245,160,0.06);
+      border: 1px solid rgba(0,245,160,0.2);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 28px;
+    }
+
+    .token-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: blink 2s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes blink {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    .token-text {
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      line-height: 1.5;
+    }
+
+    /* ── Wallet input section ── */
+    .input-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .wallet-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      color: var(--text);
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .wallet-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,245,160,0.1);
+    }
+
+    .wallet-input::placeholder { color: var(--muted); }
+
+    /* ── Buttons ── */
+    .btn {
+      border: none;
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #080c14;
+      width: 100%;
+      margin-top: 8px;
+      padding: 14px;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0,245,160,0.3);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 14px;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--accent2);
+      color: var(--accent2);
+    }
+
+    /* ── Status messages ── */
+    .status {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      display: none;
+    }
+
+    .status.visible { display: block; }
+
+    .status.info {
+      background: rgba(0,184,217,0.1);
+      border: 1px solid rgba(0,184,217,0.3);
+      color: var(--accent2);
+    }
+
+    .status.success {
+      background: rgba(0,245,160,0.1);
+      border: 1px solid rgba(0,245,160,0.3);
+      color: var(--accent);
+    }
+
+    .status.error {
+      background: rgba(255,77,109,0.1);
+      border: 1px solid rgba(255,77,109,0.3);
+      color: var(--warn);
+    }
+
+    /* ── Loading spinner ── */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(8,12,20,0.3);
+      border-top-color: #080c14;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Balance display ── */
+    .balance-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-family: 'Space Mono', monospace;
+      font-size: 12px;
+      display: none;
+    }
+
+    .balance-row.visible { display: flex; }
+    .balance-label { color: var(--muted); }
+    .balance-value { color: var(--text); font-weight: 700; }
+    .balance-value.good { color: var(--accent); }
+    .balance-value.bad  { color: var(--warn); }
+
+    /* ── Divider ── */
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 28px;
+      text-align: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .footer a { color: var(--accent2); text-decoration: none; }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <div class="card">
+
+    <!-- Logo -->
+    <div class="logo">
+      <div class="logo-mark">RL</div>
+      <div class="logo-text">RealE <span>Linux</span></div>
+    </div>
+
+    <div class="tagline">Browser Desktop · SPL Token Gated</div>
+
+    <h1>Access Your<br><span>Linux Desktop</span></h1>
+    <p class="subtitle">Connect your Solana wallet and verify your RealE token balance to launch a full browser-based Linux desktop.</p>
+
+    <!-- Token requirement badge -->
+    <div class="token-badge">
+      <div class="token-dot"></div>
+      <div class="token-text">
+        Requires: RealE Token (SPL)<br>
+        Minimum balance: <strong id="requiredDisplay">1 REALE</strong>
+      </div>
+    </div>
+
+    <!-- Wallet address input -->
+    <label class="input-label" for="walletAddr">Wallet Address</label>
+    <div class="input-row">
+      <input
+        class="wallet-input"
+        id="walletAddr"
+        type="text"
+        placeholder="Enter Solana wallet address..."
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button class="btn btn-ghost" onclick="checkBalance()" title="Check Balance">
+        ◈ Check
+      </button>
+    </div>
+
+    <!-- Balance display -->
+    <div class="balance-row" id="balanceRow">
+      <span class="balance-label">Your Balance</span>
+      <span class="balance-value" id="balanceValue">—</span>
+    </div>
+
+    <!-- Launch button -->
+    <button class="btn btn-primary" id="launchBtn" onclick="verifyAndLaunch()">
+      ⚡ Verify &amp; Launch Desktop
+    </button>
+
+    <!-- Phantom wallet connect hint -->
+    <div class="divider">or use browser wallet</div>
+
+    <button class="btn btn-ghost" style="width:100%;" onclick="connectPhantom()">
+      👻 Connect Phantom Wallet
+    </button>
+
+    <!-- Status messages -->
+    <div class="status info" id="statusInfo"></div>
+    <div class="status success" id="statusSuccess"></div>
+    <div class="status error" id="statusError"></div>
+
+    <!-- Footer -->
+    <div class="footer">
+      Powered by RealE · <a href="https://reale.one" target="_blank">reale.one</a><br>
+      © Joe Wease, RealE. All rights reserved.
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── Config (injected at build time or set via env) ──────────
+  const API_BASE = '/api';
+
+  // ── Helpers ─────────────────────────────────────────────────
+  function showStatus(type, msg) {
+    ['info','success','error'].forEach(t => {
+      const el = document.getElementById('status' + t.charAt(0).toUpperCase() + t.slice(1));
+      el.classList.remove('visible');
+      el.textContent = '';
+    });
+    const el = document.getElementById('status' + type.charAt(0).toUpperCase() + type.slice(1));
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('launchBtn');
+    btn.disabled = loading;
+    btn.innerHTML = loading
+      ? '<span class="spinner"></span>Verifying on-chain...'
+      : '⚡ Verify &amp; Launch Desktop';
+  }
+
+  function showBalance(balance, hasAccess) {
+    const row = document.getElementById('balanceRow');
+    const val = document.getElementById('balanceValue');
+    row.classList.add('visible');
+    val.textContent = formatBalance(balance) + ' REALE';
+    val.className = 'balance-value ' + (hasAccess ? 'good' : 'bad');
+  }
+
+  function formatBalance(raw) {
+    // Assumes 6 decimals — adjust if your token differs
+    return (Number(raw) / 1_000_000).toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  // ── Check balance (preview, no session) ─────────────────────
+  async function checkBalance() {
+    const wallet = document.getElementById('walletAddr').value.trim();
+    if (!wallet) {
+      showStatus('error', 'Please enter a wallet address.');
+      return;
+    }
+
+    showStatus('info', 'Checking balance on Solana...');
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/check`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        showStatus('error', data.error || 'Error checking balance.');
+        return;
+      }
+
+      showBalance(data.balance, data.hasAccess);
+
+      if (data.hasAccess) {
+        showStatus('success', '✓ Sufficient balance detected. Click Launch to proceed.');
+      } else {
+        showStatus('error',
+          `Insufficient balance.\nYou have: ${formatBalance(data.balance)} REALE\nRequired: ${formatBalance(data.required)} REALE`
+        );
+      }
+    } catch (err) {
+      showStatus('error', 'Network error. Check your connection.');
+    }
+  }
+
+  // ── Verify and launch desktop ────────────────────────────────
+  async function verifyAndLaunch() {
+    const wallet = document.getElementById('walletAddr').value.trim();
+    if (!wallet) {
+      showStatus('error', 'Please enter or connect a wallet address.');
+      return;
+    }
+
+    setLoading(true);
+    showStatus('info', 'Verifying token balance on-chain...');
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // include cookies
+        body: JSON.stringify({ wallet }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        showStatus('success', '✓ Access granted! Launching desktop...');
+        setTimeout(() => {
+          window.location.href = data.redirect;
+        }, 1200);
+      } else if (res.status === 403) {
+        showBalance(data.balance, false);
+        showStatus('error',
+          `Access denied.\nBalance: ${formatBalance(data.balance)} REALE\nRequired: ${formatBalance(data.required)} REALE\n\nAcquire more RealE tokens to unlock access.`
+        );
+      } else {
+        showStatus('error', data.error || 'Verification failed. Try again.');
+      }
+    } catch (err) {
+      showStatus('error', 'Network error. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ── Phantom wallet connect ───────────────────────────────────
+  async function connectPhantom() {
+    if (!window.phantom?.solana) {
+      showStatus('error', 'Phantom wallet not detected. Install it at phantom.app');
+      return;
+    }
+
+    try {
+      showStatus('info', 'Connecting to Phantom...');
+      const resp = await window.phantom.solana.connect();
+      const pubkey = resp.publicKey.toString();
+      document.getElementById('walletAddr').value = pubkey;
+      showStatus('success', `Connected: ${pubkey.slice(0,8)}...${pubkey.slice(-6)}`);
+      // Auto-check balance after connect
+      setTimeout(checkBalance, 600);
+    } catch (err) {
+      showStatus('error', 'Wallet connection cancelled or failed.');
+    }
+  }
+
+  // ── URL error param ─────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error') === 'unauthorized') {
+      showStatus('error', 'Session expired or invalid. Please verify your wallet again.');
+    }
+  });
+</script>
+</body>
+</html>
