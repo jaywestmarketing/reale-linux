@@ -1,0 +1,19 @@
+#!/bin/bash
+# =============================================================
+# RealE Linux — VNC xstartup
+# Copyright (c) Joe Wease, RealE
+# =============================================================
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+
+export XDG_SESSION_TYPE=x11
+export XDG_CURRENT_DESKTOP=XFCE
+
+# Start D-Bus
+eval $(dbus-launch --sh-syntax --exit-with-session)
+
+# Set background color fallback
+xsetroot -solid "#1a1a2e" &
+
+# Launch XFCE
+exec startxfce4
