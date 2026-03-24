@@ -382,16 +382,17 @@
       </div>
     </div>
 
-    <!-- Wallet address input -->
-    <label class="input-label" for="walletAddr">Wallet Address</label>
+    <!-- Wallet connect -->
+    <label class="input-label">Wallet</label>
     <div class="input-row">
       <input
         class="wallet-input"
         id="walletAddr"
         type="text"
-        placeholder="Enter Solana wallet address..."
+        placeholder="Connect wallet to sign & verify..."
         autocomplete="off"
         spellcheck="false"
+        readonly
       >
       <button class="btn btn-ghost" onclick="checkBalance()" title="Check Balance">
         ◈ Check
@@ -507,23 +508,61 @@
     }
   }
 
+  // ── Get wallet provider (Phantom, Solflare, etc.) ────────────
+  function getWalletProvider() {
+    if (window.phantom?.solana?.isPhantom) return window.phantom.solana;
+    if (window.solflare?.isSolflare) return window.solflare;
+    return null;
+  }
+
   // ── Verify and launch desktop ────────────────────────────────
   async function verifyAndLaunch() {
     const wallet = document.getElementById('walletAddr').value.trim();
     if (!wallet) {
-      showStatus('error', 'Please enter or connect a wallet address.');
+      showStatus('error', 'Please connect a wallet first.');
+      return;
+    }
+
+    const provider = getWalletProvider();
+    if (!provider || !provider.isConnected) {
+      showStatus('error', 'Wallet not connected. Click "Connect Phantom Wallet" first.');
       return;
     }
 
     setLoading(true);
-    showStatus('info', 'Verifying token balance on-chain...');
 
     try {
+      // Step 1: Request a challenge nonce from the server
+      showStatus('info', 'Requesting challenge from server...');
+      const nonceRes = await fetch(`${API_BASE}/auth/nonce?wallet=${encodeURIComponent(wallet)}`);
+      const nonceData = await nonceRes.json();
+
+      if (!nonceRes.ok) {
+        showStatus('error', nonceData.error || 'Failed to get challenge.');
+        return;
+      }
+
+      // Step 2: Sign the challenge message with the wallet
+      showStatus('info', 'Please sign the message in your wallet...');
+      const encodedMessage = new TextEncoder().encode(nonceData.message);
+      const signResult = await provider.signMessage(encodedMessage, 'utf8');
+
+      // signResult.signature is a Uint8Array — encode to base64
+      const signatureBase64 = btoa(
+        String.fromCharCode(...signResult.signature)
+      );
+
+      // Step 3: Send wallet + signature + message to verify
+      showStatus('info', 'Verifying signature and token balance...');
       const res = await fetch(`${API_BASE}/auth/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // include cookies
-        body: JSON.stringify({ wallet }),
+        credentials: 'include',
+        body: JSON.stringify({
+          wallet,
+          signature: signatureBase64,
+          message: nonceData.message,
+        }),
       });
 
       const data = await res.json();
@@ -542,22 +581,27 @@
         showStatus('error', data.error || 'Verification failed. Try again.');
       }
     } catch (err) {
-      showStatus('error', 'Network error. Try again.');
+      if (err.message?.includes('User rejected')) {
+        showStatus('error', 'Signature request was rejected.');
+      } else {
+        showStatus('error', 'Error during verification. Try again.');
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  // ── Phantom wallet connect ───────────────────────────────────
+  // ── Wallet connect (Phantom / Solflare) ─────────────────────
   async function connectPhantom() {
-    if (!window.phantom?.solana) {
-      showStatus('error', 'Phantom wallet not detected. Install it at phantom.app');
+    const provider = getWalletProvider();
+    if (!provider) {
+      showStatus('error', 'No Solana wallet detected. Install Phantom (phantom.app) or Solflare.');
       return;
     }
 
     try {
-      showStatus('info', 'Connecting to Phantom...');
-      const resp = await window.phantom.solana.connect();
+      showStatus('info', 'Connecting to wallet...');
+      const resp = await provider.connect();
       const pubkey = resp.publicKey.toString();
       document.getElementById('walletAddr').value = pubkey;
       showStatus('success', `Connected: ${pubkey.slice(0,8)}...${pubkey.slice(-6)}`);

@@ -13,9 +13,12 @@
  */
 
 require("dotenv").config();
+const crypto = require("crypto");
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
+const nacl = require("tweetnacl");
 const {
   Connection,
   PublicKey,
@@ -29,6 +32,7 @@ const {
 
 const app = express();
 app.use(express.json());
+app.use(cookieParser());
 app.use(cors({ origin: process.env.ALLOWED_ORIGIN || "*" }));
 
 // ── Config ───────────────────────────────────────────────────
@@ -54,6 +58,51 @@ const CONFIG = {
 };
 
 const solanaConnection = new Connection(CONFIG.RPC_ENDPOINT, "confirmed");
+
+// ── Nonce Store ─────────────────────────────────────────────
+// In-memory store for signature challenges. Each nonce expires after 5 minutes.
+// For multi-instance deployments, replace with Redis or similar.
+const NONCE_TTL_MS = 5 * 60 * 1000;
+const nonceStore = new Map(); // wallet → { nonce, message, expiresAt }
+
+function generateNonce() {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function createChallenge(wallet) {
+  const nonce = generateNonce();
+  const message = `RealE Linux Access\n\nWallet: ${wallet}\nNonce: ${nonce}\nTimestamp: ${new Date().toISOString()}`;
+  const expiresAt = Date.now() + NONCE_TTL_MS;
+  nonceStore.set(wallet, { nonce, message, expiresAt });
+  return message;
+}
+
+function consumeChallenge(wallet) {
+  const entry = nonceStore.get(wallet);
+  if (!entry) return null;
+  nonceStore.delete(wallet);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.message;
+}
+
+// Periodically clean expired nonces (every 60s)
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of nonceStore) {
+    if (now > val.expiresAt) nonceStore.delete(key);
+  }
+}, 60_000).unref();
+
+function verifySignature(walletAddress, signature, message) {
+  const walletPubkey = new PublicKey(walletAddress);
+  const messageBytes = new TextEncoder().encode(message);
+  const signatureBytes = Buffer.from(signature, "base64");
+  return nacl.sign.detached.verify(
+    messageBytes,
+    signatureBytes,
+    walletPubkey.toBytes()
+  );
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 function issueSession(wallet) {
@@ -109,6 +158,23 @@ app.get("/health", (req, res) => {
 });
 
 /**
+ * GET /auth/nonce
+ * Request a challenge message for the wallet to sign.
+ * Query: ?wallet=SoLaNaWaLlEtAdDrEsS
+ * Returns: { message: "..." }
+ */
+app.get("/auth/nonce", (req, res) => {
+  const { wallet } = req.query;
+
+  if (!wallet || !validateWalletAddress(wallet)) {
+    return res.status(400).json({ error: "Invalid wallet address" });
+  }
+
+  const message = createChallenge(wallet);
+  res.json({ message });
+});
+
+/**
  * POST /auth/check
  * Check token balance without issuing session (for UI feedback)
  * Body: { wallet: "SoLaNaWaLlEtAdDrEsS" }
@@ -136,25 +202,53 @@ app.post("/auth/check", async (req, res) => {
 
 /**
  * POST /auth/verify
- * Main gate — verify token balance and issue session
+ * Main gate — verify wallet signature + token balance, then issue session.
  *
- * Body: { wallet: "...", signature: "..." }
+ * Body: { wallet: "...", signature: "<base64>", message: "..." }
  *
- * NOTE: In production, verify the wallet signature against a
- * server-issued nonce to prove wallet ownership before granting access.
- * The signature verification stub is included below.
+ * The client must first GET /auth/nonce?wallet=... to obtain a challenge
+ * message, sign it with the wallet's private key, then POST the wallet,
+ * base64-encoded signature, and original message here.
  */
 app.post("/auth/verify", async (req, res) => {
-  const { wallet, signature } = req.body;
+  const { wallet, signature, message } = req.body;
 
   if (!wallet || !validateWalletAddress(wallet)) {
     return res.status(400).json({ error: "Invalid wallet address" });
   }
 
-  // TODO Phase 2: Verify signature to prove wallet ownership
-  // For Phase 1 we trust the wallet address (suitable for open beta/testnet)
-  // signature field is reserved for Phase 2 implementation
+  if (!signature || !message) {
+    return res.status(400).json({
+      error: "Missing signature or message",
+      hint: "First request a nonce via GET /auth/nonce?wallet=..., sign it, then POST wallet + signature + message here.",
+    });
+  }
 
+  // 1. Verify the message matches a valid, unexpired server-issued nonce
+  const expectedMessage = consumeChallenge(wallet);
+  if (!expectedMessage) {
+    return res.status(401).json({
+      error: "No pending challenge or nonce expired",
+      hint: "Request a new nonce via GET /auth/nonce?wallet=...",
+    });
+  }
+
+  if (message !== expectedMessage) {
+    return res.status(401).json({ error: "Challenge message mismatch" });
+  }
+
+  // 2. Verify the ed25519 signature proves wallet ownership
+  try {
+    const valid = verifySignature(wallet, signature, message);
+    if (!valid) {
+      return res.status(401).json({ error: "Invalid wallet signature" });
+    }
+  } catch (err) {
+    console.error("[verify:sig]", err.message);
+    return res.status(400).json({ error: "Malformed signature" });
+  }
+
+  // 3. Check SPL token balance on-chain
   try {
     const { balance, hasAccess } = await checkTokenBalance(wallet);
 
